@@ -8,6 +8,10 @@ development. I'm by no means an expert with Linux system administration, and
 I've never used NixOS before, so there are sure to be some speedbumps along
 the way.
 
+Update: in the end, there was quite a bit of reading and crossing of fingers
+involved, but I got NixOS installed and up and running with no problems at
+all!
+
 # Machine info
 
 * Machine: Lenovo Thinkpad X1 Carbon (6th Generation)
@@ -17,9 +21,7 @@ the way.
 * SSD disk size: 1TB
 * RAM: 16GB
 
-# Installation steps & notes
-
-## Preparing Windows and disk partitioning
+# Preparing Windows and disk partitioning
 
 1. Boot into Windows
 1. Get Windows up-to-date
@@ -114,3 +116,83 @@ the way.
         |*: nixos|726.1 MB|725.9 MB|NTFS|GPT(Data Partition)|Healthy|
         |*: linux-swap|31.25 MB|31.17 MB|NTFS|GPT(Data Partition)|Healthy|
         |*: WinRE_DRV|1000.0 MB|571.0 MB|NTFS|BPT(Recovery Partition)|Healthy|
+1. Next, I read through the [Arch Linux dual booting guide](https://wiki.archlinux.org/index.php/Dual_boot_with_Windows), and it recommended to disable `Fast startup` in Windows to avoid some issues.
+    * This links to this page for Windows 10: https://www.tenforums.com/tutorials/4189-turn-off-fast-startup-windows-10-a.html
+    * Basically go to `Control Panel -> System & Security -> Power Options` and click `Choose what the power buttons do` -> `Change settings that are currently unavailable` -> Uncheck `Turn on fast startup (recommended)` -> `Save changes`
+1. Finally, we need to disable `Secure Boot` in the BIOS, so we can boot from the NixOS install USB.
+    1. Restart Windows, and when the Lenovo screen comes up, hit `Enter` to interrupt startup, and `Enter` again to pause the countdown timer.
+    1. Hit `F1` to enter BIOS Setup Utility
+    1. Go to the `Security` tab, and go down to `Secure Boot` and hit `Enter`
+    1. With `Secure Boot` `Enabled` selected, hit `+` to toggle it to `Disabled`
+    1. Hit `F10` to save & exit
+
+# NixOS install
+
+The version of NixOS that I will be using is 18.09, with the graphical installer.
+
+1. Download the NixOS installation .iso and write it to a USB drive
+    1. Instructions: https://nixos.org/nixos/manual/index.html#sec-booting-from-usb
+1. Insert the USB stick in the machine and start/restart Windows
+1. At the `Lenovo` screen hit `Enter` to interrupt startup and `Enter` again to pause
+1. Hit `F12` to choose a temporary startup device
+1. For me, I select `USB HDD: USB1203 Flash Disk`
+1. The NixOS screen comes up, and I selected the first option `Installer`
+1. Some things happen, then I end up on the screen `<<< Welcome to NixOS 18.09.1534.d45a0d7a4f5 (x86_64) - tty1 >>>`
+1. Run `systemctl start display-manager`
+1. KDE Plasma starts up with `GParted`, `Konsole` and `NixOS Manual` icons
+1. Now connect to your WiFi network to make sure networking is setup
+    * worked without a problem for me
+1. Side note: for the entire install, I'm going to follow the `UEFI/GPT` steps, rather than the legacy `BIOS/MBR` steps.
+    * I know very little about all this stuff, but `UEFI` seems to be the right answer.
+1. Now I'm going to skip the `partition` section of the NixOS install guide, since I already created the partitions using the Windows tools (hopefully...)
+1. Now I need to format the `nixos` and `linux-swap` partitions.  I'm assuming we can use the existing EFI partition that came with Windows and not mess with that.
+    1. I'm going to use the graphical `GParted` tool rather than the CLI tools for this, to hopefully reduce the chance of a typo screwup.
+    1. Run `GParted`
+    1. `GParted` shows the following partitions:
+
+        |Partition|Name|File System|Label|Size|Used|Unused|Flags|
+        |-|-|-|-|-|-|-|-|
+        |/dev/nvme0n1p1|EFI system partition|fat32|SYSTEM|260.00 MiB|33.08 MiB|226.92 MiB|boot, hidden, esp|
+        |/dev/nvme0n1p2|Microsoft reserved partition|unknown||16.00 MiB|--|--|msftres|
+        |/dev/nvme0n1p3|Basic data partition|ntfs|Windows|195.31 GiB|40.69 GiB|154.63 GiB|msftdata|
+        |/dev/nvme0n1p4|Basic data partition|ntfs|nixos|726.06 GiB|180.50 MiB|725.88 GiB|msftdata|
+        |/dev/nvme0n1p5|Basic data partition|ntfs|linux-swap|31.25 GiB|75.29 MiB|31.18 GiB|msftdata|
+        |unallocated||unallocated||1.00 MiB|--|--||
+        |/dev/nvme0n1p6|Basic data partition|ntfs|WinRE_DRV|1000.00 MiB|424.98 MiB|575.02 MiB|hidden, diag|
+
+    1. I'm going to skip the disk encryption stuff for now, and just go for unencrypted ext4... hopefully I won't regret that later.
+        * The `zimbatm.com` guide shows how to do this for reference
+    1. Select the `nixos` partition, and `Partition -> Format to -> ext4`
+        * Tempting to try `btrfs` here, but I'll stick to the guide's suggested `ext4`
+    1. Select the `linux-swap` partition and `Partition -> Format to -> linux-swap`
+    1. `GParted` shows 2 operations pending:
+        1. `Format /dev/nvme0n1p4 as ext4`
+        1. `Format /dev/nvme0n1p5 as linux-swap`
+    1. This seems right, so click `Apply`
+    1. Now label the `nvme0n1p4` partition as `nixos` and the `nvme0n1p5` partition as `swap` and click apply
+        1. `GParted` won't let me label the pre-existing `nvme0n1p1` (EFI) partition as `boot`, probably b/c I didn't create it.
+1. Now I need to mount the nixos partition and the boot partition.
+    1. `mount /dev/nvme0n1p4 /mnt`
+    1. `mkdir /mnt/boot`
+    1. `mount /dev/nvme0n1p1 /mnt/boot`
+1. Enable swap on the swap partition
+    1. `swapon /dev/nvme0n1p5`
+1. Create the nix config file
+    1. `nixos-generate-config --root /mnt`
+1. Edit the `/mnt/etc/nixos/configuration.nix` file
+    * Referencing example here:  https://github.com/fooblahblah/nixos
+    * Use `networking.networkmanager.enable = true` rather than `wireless` (not sure why, but the `zimbatm.com` guide says to).
+    * Note: In the NixOS dual boot guide, it mentions using `grub` settings for OS discovery but this was not mentioned in the `zimbatm.com` guide (presumably because we didn't create the EFI partition, so we don't need grub to get involved there?), so I'll skip it for now and see what happens.
+    * TODO: once this is settled post the file I ended up with
+1. Run `nixos-install` to build the config and install all the pkgs
+    * At the end, you get prompted to enter the `root` password
+1. Run `reboot`
+1. Hopefully the system reboots, and you are presented iwth the OS selection screen!
+    * This means that you indeed do not need to setup the `grub` boot loader stuff for OS discovery.  I don't know enough about any of this to say more.
+    * Note that you don't need to hit `Enter` to interrupt the boot process on the `Lenovo` screen, just let it go and it should stop on the OS selection screen.
+    1. To run NixOS select `NixOS`
+    2. To run Windows select `Windows Boot Loader`
+2. In my nix config, I specified to create a user `awhite`, but I couldn't login with an empty password, so I logged in as `root` and ran:
+    1. `sudo passwd awhite` and entered a new password
+    2. Now I can login as `awhite`
+    3. You may need to re-configure WiFi as your new user

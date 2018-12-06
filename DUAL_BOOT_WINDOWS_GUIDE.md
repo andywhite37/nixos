@@ -8,9 +8,24 @@ development. I'm by no means an expert with Linux system administration, and
 I've never used NixOS before, so there are sure to be some speedbumps along
 the way.
 
-Update: in the end, there was quite a bit of reading and crossing of fingers
-involved, but I got NixOS installed and up and running with no problems at
-all!
+My general strategy is to try to keep the pre-existing Windows 10
+install intact, shrink the Windows OS partition down to 200GB, and then
+create partitions for the NixOS installation and Linux swap in the
+remaining space after shrinking the Windows partition.  This will all be
+done using Windows-based disk partitioning tools.
+
+Then, during the NixOS install, I will assume that the pre-created EFI
+boot partition will work with the Linux boot loader stuff, and leave it
+untouched, and only format the newly-created nixos and swap partitions,
+and mount them as directed in the NixOS installation guide.
+
+Update: in the end, there was quite a bit of reading and crossing of
+fingers involved, but I got NixOS installed and up and running with no
+problems at all!  Also, at no point in the process was I unable to boot
+into the Windows OS!  Leaving all the existing Windows-based partitions
+alone (other than shrinking the Windows partition), and using the
+Windows tools to create partitions, then formatting these partitions
+with the Linux tools appears to work fine.
 
 # Machine info
 

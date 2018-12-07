@@ -12,4 +12,4 @@ that described exactly what to do. I hope this information helps another newbie 
 
 [Dual booting NixOS and Windows 10 guide/notes](DUAL_BOOT_WINDOWS_GUIDE.md)
 
-TODO: once the dust settles, commit my configuration.nix file in this repo
+My NixOS configuration files can be found here:  https://github.com/andywhite37/dotfiles-nixos/tree/master/nixos
